@@ -83,7 +83,3 @@ void processSwitchChange(const JsonVariantConst &data, JsonDocument &response) {
     if (tb.connected())
         tb.sendAttributeData(LED_STATE_KEY, switch_state);
 }
-
-int buttonState = 0;
-int lastButtonState = 0; 
-bool ledState = false;
