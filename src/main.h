@@ -27,8 +27,6 @@ DHT dht(DHT_PIN, DHT_TYPE);
 #define RFID_SCK 8
 #define RFID_SS 7
 MFRC522 rfid(RFID_SS, RFID_RST);
-MFRC522::MIFARE_Key key;
-byte nuidPICC[4];
 
 void printHex(byte *buffer, byte bufferSize);
 void printDec(byte *buffer, byte bufferSize);

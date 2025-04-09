@@ -1,62 +1,45 @@
-#include "main.h"
+#include <SPI.h>
+#include <MFRC522.h>
 
+// Define RFID pins
+#define RFID_RST 17 // Chân RST của module RFID
+#define RFID_SS 5   // Chân SDA (SS) của module RFID
+#define RFID_SCK 6  // Chân SCK của module RFID
+#define RFID_MOSI 7 // Chân MOSI của module RFID  
+#define RFID_MISO 8 // Chân MISO của module RFID
 
-
-void wifiTask(void *pvParameters)
-{
-  Serial.begin(115200);
-  WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED)
-  {
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-    Serial.println("Connecting to WiFi..");
-  }
-
-  // Print ESP32 Local IP Address
-  Serial.println(WiFi.localIP());
-  vTaskDelete(NULL); // Delete the task when done
-}
-
-void SeverTask(void *pvParameters)
-{
-  if (!tb.connected())
-  {
-    Serial.println("Reconnecting to ThingsBoard...");
-    while (!tb.connect(thingBoard_Sever, token_id, THINGSBOARD_PORT))
-    {
-      vTaskDelay(1000 / portTICK_PERIOD_MS);
-      Serial.println("Failed to reconnect");
-    }
-  }
-  if (!subscribed) {
-    Serial.println("Subscribing for RPC...");
-    const std::array<RPC_Callback, MAX_RPC_SUBSCRIPTIONS> callbacks = {
-      RPC_Callback{ RPC_SWITCH_METHOD, processSwitchChange}
-    };
-    // Perform a subscription. All consequent data processing will happen in
-    // processTemperatureChange() and processSwitchChange() functions,
-    // as denoted by callbacks array.
-    if (!rpc.RPC_Subscribe(callbacks.cbegin(), callbacks.cend())) {
-      Serial.println("Failed to subscribe for RPC");
-      return;
-    }
-
-    Serial.println("Subscribe done");
-    subscribed = true;
-  }
-  vTaskDelete(NULL);
-}
+MFRC522 rfid(RFID_SS, RFID_RST);
 
 void setup()
 {
   Serial.begin(9600);
-  while (!Serial);
-  pinMode(LED_PIN, OUTPUT);
-  pinMode(BUTTON_PIN, INPUT);
-
-  xTaskCreate(wifiTask, "WiFiTask", 4096, NULL, 1, NULL);
-  xTaskCreate(SeverTask, "SeverTask", 4096, NULL, 1, NULL);
+  delay(1000);                          // Chờ 1 giây để Serial Monitor khởi động
+  Serial.println("Serial is working!"); // Dòng kiểm tra
+  SPI.begin();                          // Khởi tạo giao tiếp SPI
+  rfid.PCD_Init();                      // Khởi tạo module RFID
+  Serial.println("RFID module is ready. Please scan a card...");
+  delay(1000); // Chờ thêm 1 giây để đảm bảo thông báo được hiển thị
 }
 
 void loop()
-{}
+{
+  // Đọc thanh ghi VersionReg để kiểm tra kết nối SPI
+  byte version = rfid.PCD_ReadRegister(MFRC522::VersionReg);
+
+  // Kiểm tra giá trị trả về từ VersionReg
+  if (version == 0x92)
+  {
+    Serial.println("SPI is working. Chip is MFRC522.");
+  }
+  else if (version == 0x00 || version == 0xFF)
+  {
+    Serial.println("SPI communication failed or no RFID chip detected.");
+  }
+  else
+  {
+    Serial.print("Unknown chip detected. Version: 0x");
+    Serial.println(version, HEX);
+  }
+
+  delay(1000); // Chờ 1 giây trước khi kiểm tra lại
+}
