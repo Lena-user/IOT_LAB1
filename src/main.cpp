@@ -1,45 +1,55 @@
-#include <SPI.h>
-#include <MFRC522.h>
+#include <Adafruit_PN532.h>
+#include <Arduino.h>
+#include <Wire.h>
 
-// Define RFID pins
-#define RFID_RST 17 // Chân RST của module RFID
-#define RFID_SS 5   // Chân SDA (SS) của module RFID
-#define RFID_SCK 6  // Chân SCK của module RFID
-#define RFID_MOSI 7 // Chân MOSI của module RFID  
-#define RFID_MISO 8 // Chân MISO của module RFID
+// Chân I2C mặc định
+#define SDA_PIN 11
+#define SCL_PIN 12
 
-MFRC522 rfid(RFID_SS, RFID_RST);
+Adafruit_PN532 nfc(PN532_I2C_ADDRESS);
 
-void setup()
-{
-  Serial.begin(9600);
-  delay(1000);                          // Chờ 1 giây để Serial Monitor khởi động
-  Serial.println("Serial is working!"); // Dòng kiểm tra
-  SPI.begin();                          // Khởi tạo giao tiếp SPI
-  rfid.PCD_Init();                      // Khởi tạo module RFID
-  Serial.println("RFID module is ready. Please scan a card...");
-  delay(1000); // Chờ thêm 1 giây để đảm bảo thông báo được hiển thị
+void setup() {
+  Serial.begin(115200); // Khởi tạo Serial với tốc độ 115200 bps
+  while (!Serial) {
+    // Chờ Serial khởi tạo
+  } 
+  Serial.println("Initializing I2C...");
+  // Khởi tạo I2C với các chân mặc định
+  Wire.begin(SDA_PIN, SCL_PIN);
+  Serial.println("I2C initialized successfully.");
 }
 
-void loop()
-{
-  // Đọc thanh ghi VersionReg để kiểm tra kết nối SPI
-  byte version = rfid.PCD_ReadRegister(MFRC522::VersionReg);
-
-  // Kiểm tra giá trị trả về từ VersionReg
-  if (version == 0x92)
-  {
-    Serial.println("SPI is working. Chip is MFRC522.");
-  }
-  else if (version == 0x00 || version == 0xFF)
-  {
-    Serial.println("SPI communication failed or no RFID chip detected.");
+void loop() {
+  // Kiểm tra xem I2C có khởi tạo thành công không
+  if (!nfc.begin()) {
+    Serial.println("ERROR: Didn't find PN532 board. Check connections.");
+    return;
   }
   else
-  {
-    Serial.print("Unknown chip detected. Version: 0x");
-    Serial.println(version, HEX);
-  }
+    Serial.println("Found chip PN532!");
+  // Đặt chế độ SAM (Secure Access Module) để đọc thẻ NFC 
+  uint8_t success;
+  uint8_t uid[] = { 0, 0, 0, 0, 0, 0, 0 }; // UID của thẻ
+  uint8_t uidLength;
 
-  delay(1000); // Chờ 1 giây trước khi kiểm tra lại
+  // Kiểm tra xem có thẻ NFC nào trong phạm vi đọc không
+  success = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLength);
+  Serial.println(success);
+  if (success) {
+    Serial.println("Found an NFC card!");
+
+    // In UID của thẻ
+    Serial.print("UID Length: "); Serial.print(uidLength, DEC); Serial.println(" bytes");
+    Serial.print("UID Value: ");
+    for (uint8_t i = 0; i < uidLength; i++) {
+      Serial.print(" 0x"); Serial.print(uid[i], HEX);
+    }
+    Serial.println();
+    delay(1000); // Chờ 1 giây trước khi kiểm tra lại
+  } else {
+    Serial.println("No NFC card found.");
+    Serial.println("Waiting for an NFC card...");
+    // Không tìm thấy thẻ
+    delay(500); // Chờ 0.5 giây trước khi kiểm tra lại
+  }
 }
