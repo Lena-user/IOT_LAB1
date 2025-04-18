@@ -11,6 +11,8 @@
 #include <ArduinoOTA.h>
 #include <Server_Side_RPC.h>
 #include <freertos/semphr.h>
+#include <sstream>
+#include <iomanip>
 
 
 #include <vector>
@@ -64,6 +66,7 @@ extern bool enableReadTask;
 
 bool writeToNFCTag(const String &textToWrite);
 std::vector<std::pair<std::string, std::string>> readFromNFCTag();
+bool isUIDRegistered(const std::vector<std::pair<std::string, std::string>> &tags);
 void printRegisteredTags();
 void displayMenu();
 void deleteTag();
