@@ -36,11 +36,17 @@ std::vector<std::string> statusList = {
     "status_Room_2",
     "status_Room_3",
     "status_Room_4"};
+std::vector<std::string> doorList = {
+    "Admin",
+    "door_Room_1",
+    "door_Room_2",
+    "door_Room_3",
+    "door_Room_4"};
 
 bool enableReadTask = true; // Biến toàn cục để kiểm soát việc đọc thẻ NFC
 
-TaskHandle_t readTaskHandle = NULL; // Handle cho task đọc thẻ NFC
-TaskHandle_t wifiTaskHandle = NULL;  // Handle cho task WiFi
+TaskHandle_t readTaskHandle = NULL;   // Handle cho task đọc thẻ NFC
+TaskHandle_t wifiTaskHandle = NULL;   // Handle cho task WiFi
 TaskHandle_t serverTaskHandle = NULL; // Handle cho task server
 
 #define SDA_PIN 11
@@ -53,7 +59,7 @@ void setup()
 {
   Serial.begin(115200);
   Wire.begin(SDA_PIN, SCL_PIN); // Giảm tốc độ I2C xuống 100kHz
-  Wire.setClock(100000); // Thiết lập tốc độ I2C là 100kHz
+  Wire.setClock(100000);        // Thiết lập tốc độ I2C là 100kHz
   pinMode(BUTTON_PIN, INPUT);
 
   Serial.println("Initializing PN532...");
@@ -65,7 +71,7 @@ void setup()
   xTaskCreate(readAndUnlockDoorTask, "ReadAndUnlockDoorTask", 4096, NULL, 1, &readTaskHandle);
 
   vTaskSuspend(serverTaskHandle); // Tạm dừng task SeverTask cho đến khi kết nối WiFi thành công
-  vTaskSuspend(readTaskHandle); // Tạm dừng task đọc thẻ NFC cho đến khi kết nối WiFi thành công
+  vTaskSuspend(readTaskHandle);   // Tạm dừng task đọc thẻ NFC cho đến khi kết nối WiFi thành công
 }
 
 void loop()
@@ -73,98 +79,124 @@ void loop()
   tb.loop();
 }
 
-void readAndUnlockDoorTask(void* pvParameters) 
+void readAndUnlockDoorTask(void *pvParameters)
 {
-  while (1) {
-      uint8_t uid[7];
-      uint8_t uidLength;
+  while (1)
+  {
+    uint8_t uid[7];
+    uint8_t uidLength;
 
-      Serial.println("Waiting for NFC tag...");
+    Serial.println("Waiting for NFC tag...");
 
-      // Kiểm tra xem có thẻ NFC được phát hiện không
-      if (nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLength)) {
-          uint8_t keyA[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+    // Kiểm tra xem có thẻ NFC được phát hiện không
+    if (nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLength))
+    {
+      uint8_t keyA[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 
-          if (nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 4, 0, keyA)) {
-              uint8_t dataRead[16];
+      if (nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 4, 0, keyA))
+      {
+        uint8_t dataRead[16];
 
-              if (nfc.mifareclassic_ReadDataBlock(4, dataRead)) {
-                  // Chuyển UID thành chuỗi
-                  String uidString = "";
-                  for (int i = 0; i < uidLength; i++) {
-                      char buffer[3];
-                      sprintf(buffer, "%02X", uid[i]);
-                      uidString += buffer;
-                      if (i < uidLength - 1) uidString += ":";
-                  }
-
-                  // Chuyển dữ liệu thành chuỗi
-                  String roomData = "";
-                  for (int i = 0; i < 16; i++) {
-                      if (dataRead[i] != ' ') roomData += (char)dataRead[i];
-                  }
-
-                  Serial.print("Scanned UID: ");
-                  Serial.println(uidString);
-                  Serial.print("Room Data: ");
-                  Serial.println(roomData);
-
-                  // Kiểm tra nếu thẻ hợp lệ
-                  auto it = std::find_if(registeredTags.begin(), registeredTags.end(),
-                      [&uidString, &roomData](const std::pair<std::string, std::string>& tag) {
-                          return tag.first == std::string(uidString.c_str()) && tag.second == std::string(roomData.c_str());
-                      });
-
-                  if (it != registeredTags.end()) {
-                      // Mở khóa cửa
-                      Serial.println("Access granted. Door unlocked!");
-                      vTaskDelay(5000 / portTICK_PERIOD_MS); // Giữ cửa mở trong 5 giây
-                      Serial.println("Door locked.");
-                  } else {
-                      Serial.println("Access denied. Invalid tag.");
-                  }
-              } else {
-                  Serial.println("Failed to read from the NFC tag.");
-              }
-          } else {
-              Serial.println("Failed to authenticate block 4.");
+        if (nfc.mifareclassic_ReadDataBlock(4, dataRead))
+        {
+          // Chuyển UID thành chuỗi
+          String uidString = "";
+          for (int i = 0; i < uidLength; i++)
+          {
+            char buffer[3];
+            sprintf(buffer, "%02X", uid[i]);
+            uidString += buffer;
+            if (i < uidLength - 1)
+              uidString += ":";
           }
-      } else {
-          Serial.println("No NFC tag detected.");
-      }
 
-      vTaskDelay(5000 / portTICK_PERIOD_MS); // Chờ 1 giây trước khi quét lại
+          // Chuyển dữ liệu thành chuỗi
+          String roomData = "";
+          for (int i = 0; i < 16; i++)
+          {
+            if (dataRead[i] != ' ')
+              roomData += (char)dataRead[i];
+          }
+
+          Serial.print("Scanned UID: ");
+          Serial.println(uidString);
+          Serial.print("Room Data: ");
+          Serial.println(roomData);
+
+          // Kiểm tra nếu thẻ hợp lệ
+          auto it = std::find_if(registeredTags.begin(), registeredTags.end(),
+                                 [&uidString, &roomData](const std::pair<std::string, std::string> &tag)
+                                 {
+                                   return tag.first == std::string(uidString.c_str()) && tag.second == std::string(roomData.c_str());
+                                 });
+
+          if (it != registeredTags.end())
+          {
+            // Mở khóa cửa
+            Serial.println("Access granted. Door unlocked!");
+            tb.sendAttributeData(doorList.at(strtol(roomData.c_str(), nullptr, 10)).c_str(), true); // Gửi trạng thái mở khóa cửa lên ThingsBoard
+            vTaskDelay(5000 / portTICK_PERIOD_MS); // Giữ cửa mở trong 5 giây
+            Serial.println("Door locked.");
+            tb.sendAttributeData(doorList.at(strtol(roomData.c_str(), nullptr, 10)).c_str(), false); // Gửi trạng thái khóa cửa lên ThingsBoard
+          }
+          else
+          {
+            Serial.println("Access denied. Invalid tag.");
+          }
+        }
+        else
+        {
+          Serial.println("Failed to read from the NFC tag.");
+        }
+      }
+      else
+      {
+        Serial.println("Failed to authenticate block 4.");
+      }
+    }
+    else
+    {
+      Serial.println("No NFC tag detected.");
+    }
+
+    vTaskDelay(5000 / portTICK_PERIOD_MS); // Chờ 1 giây trước khi quét lại
   }
 }
 
-std::vector<std::pair<std::string, std::string>> readFromNFCTag() {
-  std::vector<std::pair<std::string, std::string>> tagData; 
+std::vector<std::pair<std::string, std::string>> readFromNFCTag()
+{
+  std::vector<std::pair<std::string, std::string>> tagData;
 
   uint8_t uid[7];
   uint8_t uidLength;
 
-  if (!nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLength)) {
-      Serial.println("No NFC tag detected.");
-      return tagData;
+  if (!nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLength))
+  {
+    Serial.println("No NFC tag detected.");
+    return tagData;
   }
 
   uint8_t keyA[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-  if (!nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 4, 0, keyA)) {
-      Serial.println("Failed to authenticate block 4.");
-      return tagData;
+  if (!nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 4, 0, keyA))
+  {
+    Serial.println("Failed to authenticate block 4.");
+    return tagData;
   }
 
   uint8_t dataRead[16];
-  if (!nfc.mifareclassic_ReadDataBlock(4, dataRead)) {
-      Serial.println("Failed to read from the NFC tag.");
-      return tagData;
+  if (!nfc.mifareclassic_ReadDataBlock(4, dataRead))
+  {
+    Serial.println("Failed to read from the NFC tag.");
+    return tagData;
   }
 
   // Chuyển UID thành chuỗi Hex
   std::ostringstream uidStream;
-  for (int i = 0; i < uidLength; i++) {
-      uidStream << std::uppercase << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(uid[i]);
-      if (i < uidLength - 1) uidStream << ":";
+  for (int i = 0; i < uidLength; i++)
+  {
+    uidStream << std::uppercase << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(uid[i]);
+    if (i < uidLength - 1)
+      uidStream << ":";
   }
   std::string uidString = uidStream.str();
 
@@ -288,7 +320,7 @@ void deleteTag()
 
 void wifiTask(void *pvParameters)
 {
-  
+
   Serial.begin(115200);
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED)
@@ -300,7 +332,7 @@ void wifiTask(void *pvParameters)
   // Print ESP32 Local IP Address
   Serial.println(WiFi.localIP());
   vTaskResume(serverTaskHandle); // Resume SeverTask sau khi kết nối WiFi thành công
-  vTaskDelete(NULL); // Delete the task when done
+  vTaskDelete(NULL);             // Delete the task when done
 }
 
 void SeverTask(void *pvParameters)
@@ -336,12 +368,14 @@ void SeverTask(void *pvParameters)
   vTaskDelete(NULL);
 }
 
-bool writeToNFCTag(const String &textToWrite) {
+bool writeToNFCTag(const String &textToWrite)
+{
   Serial.println("Starting writeToNFCTag...");
 
-  if (textToWrite.length() > 16) {
-      Serial.println("Error: Input text is too long. Maximum 16 characters allowed.");
-      return false;
+  if (textToWrite.length() > 16)
+  {
+    Serial.println("Error: Input text is too long. Maximum 16 characters allowed.");
+    return false;
   }
 
   uint8_t dataToWrite[16];
@@ -351,57 +385,66 @@ bool writeToNFCTag(const String &textToWrite) {
   uint8_t uid[7];
   uint8_t uidLength;
 
-  if (!nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLength)) {
-      Serial.println("No NFC tag detected.");
-      return false;
+  if (!nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLength))
+  {
+    Serial.println("No NFC tag detected.");
+    return false;
   }
 
   std::ostringstream uidStream;
-  for (int i = 0; i < uidLength; i++) {
-      uidStream << std::uppercase << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(uid[i]);
-      if (i < uidLength - 1) uidStream << ":";
+  for (int i = 0; i < uidLength; i++)
+  {
+    uidStream << std::uppercase << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(uid[i]);
+    if (i < uidLength - 1)
+      uidStream << ":";
   }
   std::string uidString = uidStream.str();
   Serial.print("UID: ");
   Serial.println(uidString.c_str());
 
   std::vector<std::pair<std::string, std::string>> tags = {{uidString, ""}};
-  if (isUIDRegistered(tags)) {
-      Serial.println("UID is already registered.");
-      return false;
+  if (isUIDRegistered(tags))
+  {
+    Serial.println("UID is already registered.");
+    return false;
   }
 
   uint8_t keyA[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-  if (!nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 4, 0, keyA)) {
-      Serial.println("Failed to authenticate block 4.");
-      return false;
+  if (!nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 4, 0, keyA))
+  {
+    Serial.println("Failed to authenticate block 4.");
+    return false;
   }
 
-  if (!nfc.mifareclassic_WriteDataBlock(4, dataToWrite)) {
-      Serial.println("Failed to write to NFC tag.");
-      return false;
+  if (!nfc.mifareclassic_WriteDataBlock(4, dataToWrite))
+  {
+    Serial.println("Failed to write to NFC tag.");
+    return false;
   }
   registeredTags.emplace_back(uidString, textToWrite.c_str());
   return true;
 }
 
-bool isUIDRegistered(const std::vector<std::pair<std::string, std::string>> &tags) {
-  if (tags.empty()) {
-      Serial.println("No tags provided for checking.");
-      return false;
+bool isUIDRegistered(const std::vector<std::pair<std::string, std::string>> &tags)
+{
+  if (tags.empty())
+  {
+    Serial.println("No tags provided for checking.");
+    return false;
   }
 
   const std::string &uidString = tags[0].first;
 
   // Kiểm tra UID bằng std::any_of() thay vì std::find_if()
   bool isRegistered = std::any_of(registeredTags.begin(), registeredTags.end(),
-  [&uidString](const std::pair<std::string, std::string> &tag) {
-      return tag.first == uidString;
-  });
+                                  [&uidString](const std::pair<std::string, std::string> &tag)
+                                  {
+                                    return tag.first == uidString;
+                                  });
 
-Serial.print("UID ");
-Serial.print(uidString.c_str());
-Serial.println(isRegistered ? " is registered." : " is not registered.");
+  Serial.print("UID ");
+  Serial.print(uidString.c_str());
+  Serial.println(isRegistered ? " is registered." : " is not registered.");
 
   return isRegistered;
 }
@@ -495,7 +538,7 @@ void processCheckInOut(const JsonVariantConst &data, JsonDocument &response)
     response["message"] = "ROOM or Request key not found in RPC data.";
     Serial.println("ROOM or Request key not found in RPC data.");
   }
-  delay(2000); // Đợi 2 giây trước khi tiếp tục 
+  delay(2000); // Đợi 2 giây trước khi tiếp tục
   xTaskCreate(readAndUnlockDoorTask, "ReadTask", 4096, NULL, 1, &readTaskHandle);
   Serial.print("Resuming read task...");
 }
